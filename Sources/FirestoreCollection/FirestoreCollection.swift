@@ -1,6 +1,6 @@
 //
 //  FirestoreCollection.swift
-//  
+//
 //
 //  Created by Alex Nagy on 06.02.2025.
 //
@@ -9,6 +9,7 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 
+@MainActor
 @Observable
 public class FirestoreCollection<F: Firestorable> {
     
