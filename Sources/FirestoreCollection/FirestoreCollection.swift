@@ -59,17 +59,13 @@ public class FirestoreCollection<F: Firestorable> {
         let documents = snapshot.documents.compactMap { document in
             try? document.data(as: F.self)
         }
-        if documents.isEmpty {
-            self.documents = documents
-        } else {
-            documents.forEach { document in
-                if let animation {
-                    withAnimation(animation) {
-                        self.documents.append(document)
-                    }
-                } else {
+        documents.forEach { document in
+            if let animation {
+                withAnimation(animation) {
                     self.documents.append(document)
                 }
+            } else {
+                self.documents.append(document)
             }
         }
         guard let lastSnapshot = snapshot.documents.last else {
