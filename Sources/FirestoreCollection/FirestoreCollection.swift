@@ -28,13 +28,13 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - id: the `id` of the document
     ///   - animation: optional animation of the the document beig fetched. Default is `nil`
     public func fetch(id: String, animation: Animation? = nil) async throws {
-        let item = try await Firestore.firestore().collection(path).document(id).getDocument(as: F.self)
+        let document = try await Firestore.firestore().collection(path).document(id).getDocument(as: F.self)
         if let animation {
             withAnimation(animation) {
-                documents = [item]
+                documents = [document]
             }
         } else {
-            documents = [item]
+            documents = [document]
         }
     }
     
@@ -129,28 +129,20 @@ public class FirestoreCollection<F: Firestorable> {
     /// Updates the provided document in the collection
     /// - Parameters:
     ///   - document: the document to be updated
+    ///   - updatedAtServerTimestampStrategy: Default `local` is going to NOT do another fetch for the document and set the `createdAt` to `Date.now`. If set to `server` another fetch will be made to get the server timestamp of the `updatedAt`. IMPORTANT: Set `server` only if `updatedAt` is critical for your logic, because it will do two operations: one when updating and a second one when fetching it to retreive the server timestamp for the `updatedAt`
     ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
-    public func update(with document: F, animation: Animation? = nil) throws {
-        guard let documentId = document.id as? String else { return }
-        var firestorable = document
-        firestorable.updatedAt = nil
-        try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
-        if let onlyOneDocument = self.documents.first, let documentID = onlyOneDocument.id as? String, documentID == documentId {
-            self.documents = [document]
-        } else {
-            let index = documents.firstIndex { document in
-                guard let documentID = document.id as? String else { return false }
-                return documentID == documentId
-            }
-            guard let index else { return }
-            if let animation {
-                withAnimation(animation) {
-                    documents[index] = document
-                }
-            } else {
-                documents[index] = document
-            }
+    public func update(with document: F, updatedAtServerTimestampStrategy: UpdatedAtServerTimestampStrategy = .local, animation: Animation? = nil) async throws {
+        switch updatedAtServerTimestampStrategy {
+        case .local:
+            try updateWithLocalUpdatedAt(with: document, animation: animation)
+        case .server:
+            try await updateWithServerUpdatedAt(with: document, animation: animation)
         }
+    }
+    
+    public enum UpdatedAtServerTimestampStrategy {
+        case server
+        case local
     }
     
     /// Deletes the provided document from the collection
@@ -212,5 +204,62 @@ public class FirestoreCollection<F: Firestorable> {
             }
         }
         return query
+    }
+    
+    private func fetch(id: String) async throws -> F {
+        try await Firestore.firestore().collection(path).document(id).getDocument(as: F.self)
+    }
+    
+    private func updateWithServerUpdatedAt(with document: F, animation: Animation? = nil) async throws {
+        guard let documentId = document.id as? String else { return }
+        var firestorable = document
+        firestorable.updatedAt = nil
+        try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
+        let updatedDocument = try await fetch(id: documentId)
+        if let onlyOneDocument = self.documents.first, let documentID = onlyOneDocument.id as? String, documentID == documentId {
+            self.documents = [updatedDocument]
+        } else {
+            let index = documents.firstIndex { document in
+                guard let documentID = document.id as? String else { return false }
+                return documentID == documentId
+            }
+            guard let index else { return }
+            if let animation {
+                withAnimation(animation) {
+                    documents[index] = updatedDocument
+                }
+            } else {
+                documents[index] = updatedDocument
+            }
+        }
+    }
+    
+    private func updateWithLocalUpdatedAt(with document: F, animation: Animation? = nil) throws {
+        guard let documentId = document.id as? String else { return }
+        var firestorable = document
+        firestorable.updatedAt = nil
+        try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
+        if let onlyOneDocument = self.documents.first, let documentID = onlyOneDocument.id as? String, documentID == documentId {
+            var document = document
+            document.updatedAt = Timestamp(date: .now)
+            self.documents = [document]
+        } else {
+            let index = documents.firstIndex { document in
+                guard let documentID = document.id as? String else { return false }
+                return documentID == documentId
+            }
+            guard let index else { return }
+            if let animation {
+                withAnimation(animation) {
+                    var document = document
+                    document.updatedAt = Timestamp(date: .now)
+                    documents[index] = document
+                }
+            } else {
+                var document = document
+                document.updatedAt = Timestamp(date: .now)
+                documents[index] = document
+            }
+        }
     }
 }
