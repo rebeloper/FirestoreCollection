@@ -1,5 +1,5 @@
 //
-//  FirestoreCollectionQuery.swift
+//  FirestoreCollection.swift
 //
 //
 //  Created by Alex Nagy on 06.02.2025.
@@ -12,7 +12,7 @@ import FirebaseFirestore
 /// An observable for the set collection at the provided `path`
 @MainActor
 @Observable
-public class FirestoreCollectionQuery<F: Firestorable> {
+public class FirestoreCollection<F: Firestorable> {
     
     let path: String
     
@@ -20,8 +20,8 @@ public class FirestoreCollectionQuery<F: Firestorable> {
         self.path = path
     }
     
-    public var documents: [F] = []
-    public var document: F?
+    public var queryDocuments: [F] = []
+    public var queryDocument: F?
     var lastQueryDocumentSnapshot: QueryDocumentSnapshot?
     
     /// Fetches one document with the specified `id`
