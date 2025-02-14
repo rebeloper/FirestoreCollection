@@ -28,7 +28,7 @@ public class FirestoreCollection<F: Firestorable> {
     /// - Parameters:
     ///   - id: the `id` of the document
     ///   - animation: optional animation of the the document beig fetched. Default is `nil`
-    public func fetch(id: String, animation: Animation? = nil) async throws {
+    public func fetch(id: String, animation: Animation? = .default) async throws {
         let document = try await Firestore.firestore().collection(path).document(id).getDocument(as: F.self)
         if let animation {
             withAnimation(animation) {
@@ -43,7 +43,7 @@ public class FirestoreCollection<F: Firestorable> {
     /// - Parameters:
     ///   - predicates: predicates for the fetch. Default is empty.
     ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
-    public func fetchAll(predicates: [QueryPredicate] = [], animation: Animation? = nil) async throws {
+    public func fetchAll(predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws {
         let query = getQuery(path: path, predicates: predicates)
         let snapshot = try await query.getDocuments()
         let documents = snapshot.documents.compactMap { document in
@@ -68,7 +68,7 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
-    public func fetchNext(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = nil) async throws -> FetchedCollectionState {
+    public func fetchNext(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws -> FetchedCollectionState {
         var query: Query
         if let lastQueryDocumentSnapshot {
             query = getQuery(path: path, predicates: predicates)
@@ -109,7 +109,7 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
-    public func fetchFirst(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = nil) async throws -> FetchedCollectionState {
+    public func fetchFirst(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws -> FetchedCollectionState {
         queryDocuments.removeAll()
         lastQueryDocumentSnapshot = nil
         return try await fetchNext(limit, orderBy: orderBy, descending: descending, predicates: predicates, animation: animation)
@@ -133,7 +133,7 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - document: the document to be updated
     ///   - updatedAtServerTimestampStrategy: Default `local` is going to NOT do another fetch for the document and set the `createdAt` to `Date.now`. If set to `server` another fetch will be made to get the server timestamp of the `updatedAt`. IMPORTANT: Set `server` only if `updatedAt` is critical for your logic, because it will do two operations: one when updating and a second one when fetching it to retreive the server timestamp for the `updatedAt`
     ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
-    public func update(with document: F, updatedAtServerTimestampStrategy: UpdatedAtServerTimestampStrategy = .local, animation: Animation? = nil) async throws {
+    public func update(with document: F, updatedAtServerTimestampStrategy: UpdatedAtServerTimestampStrategy = .local, animation: Animation? = .default) async throws {
         switch updatedAtServerTimestampStrategy {
         case .local:
             try updateWithLocalUpdatedAt(with: document, animation: animation)
@@ -151,7 +151,7 @@ public class FirestoreCollection<F: Firestorable> {
     /// - Parameters:
     ///   - document: the document to be deleted
     ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
-    public func delete(_ document: F, animation: Animation? = nil) async throws {
+    public func delete(_ document: F, animation: Animation? = .default) async throws {
         guard let documentId = document.id as? String else { return }
         try await Firestore.firestore().collection(path).document(documentId).delete()
         if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
@@ -212,7 +212,7 @@ public class FirestoreCollection<F: Firestorable> {
         try await Firestore.firestore().collection(path).document(id).getDocument(as: F.self)
     }
     
-    private func updateWithServerUpdatedAt(with document: F, animation: Animation? = nil) async throws {
+    private func updateWithServerUpdatedAt(with document: F, animation: Animation? = .default) async throws {
         guard let documentId = document.id as? String else { return }
         var firestorable = document
         firestorable.updatedAt = nil
@@ -236,7 +236,7 @@ public class FirestoreCollection<F: Firestorable> {
         }
     }
     
-    private func updateWithLocalUpdatedAt(with document: F, animation: Animation? = nil) throws {
+    private func updateWithLocalUpdatedAt(with document: F, animation: Animation? = .default) throws {
         guard let documentId = document.id as? String else { return }
         var firestorable = document
         firestorable.updatedAt = nil
