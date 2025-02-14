@@ -49,6 +49,7 @@ public class FirestoreCollection<F: Firestorable> {
         let documents = snapshot.documents.compactMap { document in
             try? document.data(as: F.self)
         }
+        queryDocuments.removeAll()
         if let animation {
             withAnimation(animation) {
                 queryDocuments = documents
@@ -108,7 +109,7 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
-    public func resetAndFetchNext(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = nil) async throws -> FetchedCollectionState {
+    public func fetchFirst(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = nil) async throws -> FetchedCollectionState {
         queryDocuments.removeAll()
         lastQueryDocumentSnapshot = nil
         return try await fetchNext(limit, orderBy: orderBy, descending: descending, predicates: predicates, animation: animation)
