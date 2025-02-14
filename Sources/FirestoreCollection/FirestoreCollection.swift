@@ -32,10 +32,10 @@ public class FirestoreCollection<F: Firestorable> {
         let document = try await Firestore.firestore().collection(path).document(id).getDocument(as: F.self)
         if let animation {
             withAnimation(animation) {
-                self.document = document
+                queryDocument = document
             }
         } else {
-            self.document = document
+            queryDocument = document
         }
     }
     
@@ -51,10 +51,10 @@ public class FirestoreCollection<F: Firestorable> {
         }
         if let animation {
             withAnimation(animation) {
-                self.documents = documents
+                queryDocuments = documents
             }
         } else {
-            self.documents = documents
+            queryDocuments = documents
         }
     }
     
@@ -86,10 +86,10 @@ public class FirestoreCollection<F: Firestorable> {
         documents.forEach { document in
             if let animation {
                 withAnimation(animation) {
-                    self.documents.append(document)
+                    queryDocuments.append(document)
                 }
             } else {
-                self.documents.append(document)
+                queryDocuments.append(document)
             }
         }
         guard let lastSnapshot = snapshot.documents.last else {
@@ -109,7 +109,7 @@ public class FirestoreCollection<F: Firestorable> {
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
     public func resetAndFetchNext(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = nil) async throws -> FetchedCollectionState {
-        documents.removeAll()
+        queryDocuments.removeAll()
         lastQueryDocumentSnapshot = nil
         return try await fetchNext(limit, orderBy: orderBy, descending: descending, predicates: predicates, animation: animation)
     }
@@ -153,20 +153,20 @@ public class FirestoreCollection<F: Firestorable> {
     public func delete(_ document: F, animation: Animation? = nil) async throws {
         guard let documentId = document.id as? String else { return }
         try await Firestore.firestore().collection(path).document(documentId).delete()
-        if let onlyOneDocument = self.documents.first, let documentID = onlyOneDocument.id as? String, documentID == documentId {
-            self.documents = []
+        if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
+            queryDocument = nil
         } else {
-            let index = documents.firstIndex { document in
+            let index = queryDocuments.firstIndex { document in
                 guard let documentID = document.id as? String else { return false }
                 return documentID == documentId
             }
             guard let index else { return }
             if let animation {
                 _ = withAnimation(animation) {
-                    documents.remove(at: index)
+                    queryDocuments.remove(at: index)
                 }
             } else {
-                documents.remove(at: index)
+                queryDocuments.remove(at: index)
             }
         }
     }
@@ -217,20 +217,20 @@ public class FirestoreCollection<F: Firestorable> {
         firestorable.updatedAt = nil
         try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
         let updatedDocument = try await fetch(id: documentId)
-        if let onlyOneDocument = self.documents.first, let documentID = onlyOneDocument.id as? String, documentID == documentId {
-            self.documents = [updatedDocument]
+        if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
+            queryDocument = updatedDocument
         } else {
-            let index = documents.firstIndex { document in
+            let index = queryDocuments.firstIndex { document in
                 guard let documentID = document.id as? String else { return false }
                 return documentID == documentId
             }
             guard let index else { return }
             if let animation {
                 withAnimation(animation) {
-                    documents[index] = updatedDocument
+                    queryDocuments[index] = updatedDocument
                 }
             } else {
-                documents[index] = updatedDocument
+                queryDocuments[index] = updatedDocument
             }
         }
     }
@@ -240,12 +240,12 @@ public class FirestoreCollection<F: Firestorable> {
         var firestorable = document
         firestorable.updatedAt = nil
         try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
-        if let onlyOneDocument = self.documents.first, let documentID = onlyOneDocument.id as? String, documentID == documentId {
+        if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
             var document = document
             document.updatedAt = Timestamp(date: .now)
-            self.documents = [document]
+            queryDocument = document
         } else {
-            let index = documents.firstIndex { document in
+            let index = queryDocuments.firstIndex { document in
                 guard let documentID = document.id as? String else { return false }
                 return documentID == documentId
             }
@@ -254,12 +254,12 @@ public class FirestoreCollection<F: Firestorable> {
                 withAnimation(animation) {
                     var document = document
                     document.updatedAt = Timestamp(date: .now)
-                    documents[index] = document
+                    queryDocuments[index] = document
                 }
             } else {
                 var document = document
                 document.updatedAt = Timestamp(date: .now)
-                documents[index] = document
+                queryDocuments[index] = document
             }
         }
     }
