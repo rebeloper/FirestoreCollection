@@ -24,7 +24,7 @@ public class FirestoreCollection<F: Firestorable> {
     
     public var queryDocuments: [F] = []
     public var queryDocument: F?
-    public var count: Int = 0
+    public var count: Int?
     
     var lastQueryDocumentSnapshot: QueryDocumentSnapshot?
     
