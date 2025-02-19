@@ -14,22 +14,27 @@ import FirebaseFirestore
 @Observable
 public class FirestoreCollection<F: Firestorable> {
     
+    let database: Firestore
     let path: String
     
-    public init(path: String) {
+    public init(database: Firestore = Firestore.firestore(), path: String) {
+        self.database = database
         self.path = path
     }
     
     public var queryDocuments: [F] = []
     public var queryDocument: F?
+    public var count: Int = 0
+    
     var lastQueryDocumentSnapshot: QueryDocumentSnapshot?
     
     /// Fetches one document with the specified `id`
     /// - Parameters:
     ///   - id: the `id` of the document
-    ///   - animation: optional animation of the the document beig fetched. Default is `nil`
+    ///   - database: a `Firestore` instance
+    ///   - animation: optional animation of the operation. Default is `.default`
     public func fetch(id: String, animation: Animation? = .default) async throws {
-        let document = try await Firestore.firestore().collection(path).document(id).getDocument(as: F.self)
+        let document = try await database.collection(path).document(id).getDocument(as: F.self)
         if let animation {
             withAnimation(animation) {
                 queryDocument = document
@@ -39,11 +44,11 @@ public class FirestoreCollection<F: Firestorable> {
         }
     }
     
-    /// Fetches all the documents from the collection
+    /// Fetches documents from the collection with the given predicates
     /// - Parameters:
     ///   - predicates: predicates for the fetch. Default is empty.
-    ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
-    public func fetchAll(predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws {
+    ///   - animation: optional animation of the operation. Default is `.default`
+    public func fetch(predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws {
         let query = getQuery(path: path, predicates: predicates)
         let snapshot = try await query.getDocuments()
         let documents = snapshot.documents.compactMap { document in
@@ -65,7 +70,7 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - orderBy: the key for the order of the fetch
     ///   - descending: should the order be descending
     ///   - predicates: other predicates than `limit` or `orderBy`. Defualt is empty
-    ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
+    ///   - animation: optional animation of the operation. Default is `.default`
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
     public func fetchNext(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws -> FetchedCollectionState {
@@ -106,7 +111,7 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - orderBy: the key for the order of the fetch
     ///   - descending: should the order be descending
     ///   - predicates: other predicates than `limit` or `orderBy`. Defualt is empty
-    ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
+    ///   - animation: optional animation of the operation. Default is `.default`
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
     public func fetchFirst(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws -> FetchedCollectionState {
@@ -132,7 +137,7 @@ public class FirestoreCollection<F: Firestorable> {
     /// - Parameters:
     ///   - document: the document to be updated
     ///   - updatedAtServerTimestampStrategy: Default `local` is going to NOT do another fetch for the document and set the `createdAt` to `Date.now`. If set to `server` another fetch will be made to get the server timestamp of the `updatedAt`. IMPORTANT: Set `server` only if `updatedAt` is critical for your logic, because it will do two operations: one when updating and a second one when fetching it to retreive the server timestamp for the `updatedAt`
-    ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
+    ///   - animation: optional animation of the operation. Default is `.default`
     public func update(with document: F, updatedAtServerTimestampStrategy: UpdatedAtServerTimestampStrategy = .local, animation: Animation? = .default) async throws {
         switch updatedAtServerTimestampStrategy {
         case .local:
@@ -150,7 +155,7 @@ public class FirestoreCollection<F: Firestorable> {
     /// Deletes the provided document from the collection
     /// - Parameters:
     ///   - document: the document to be deleted
-    ///   - animation: optional animation of the the documents beig fetched. Default is `nil`
+    ///   - animation: optional animation of the operation. Default is `.default`
     public func delete(_ document: F, animation: Animation? = .default) async throws {
         guard let documentId = document.id as? String else { return }
         try await Firestore.firestore().collection(path).document(documentId).delete()
@@ -172,10 +177,28 @@ public class FirestoreCollection<F: Firestorable> {
         }
     }
     
+    /// Fetches the documents count from the collection with the given predicates
+    /// - Parameters:
+    ///   - predicates: predicates for the fetch. Default is empty.
+    ///   - animation: optional animation of the operation. Default is `.default`
+    public func fetchCount(predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws {
+        let query = getQuery(path: path, predicates: predicates)
+        let countQuery = query.count
+        let snapshot = try await countQuery.getAggregation(source: .server)
+        let count = Int(truncating: snapshot.count)
+        if let animation {
+            withAnimation(animation) {
+                self.count = count
+            }
+        } else {
+            self.count = count
+        }
+    }
+    
     // MARK: - Private
     
     private func getQuery(path: String, predicates: [QueryPredicate]) -> Query {
-        var query: Query = Firestore.firestore().collection(path)
+        var query: Query = database.collection(path)
         
         for predicate in predicates {
             switch predicate {
