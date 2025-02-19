@@ -152,6 +152,56 @@ public class FirestoreCollection<F: Firestorable> {
         case local
     }
     
+    /// Increases a field value by the amount specified inside a document.
+    /// - Parameters:
+    ///   - field: The field to be increased.
+    ///   - by: The amount to decrease. Defaults to 1.
+    ///   - document: The document.
+    public func increase(_ field: String, by: Int = 1, forDocument document: F) async throws {
+        guard let id = document.id as? String else { return }
+        guard by > 0 else { return }
+        try await database.collection(path).document(id).updateData([
+            field: FieldValue.increment(Int64(by))
+        ])
+    }
+    
+    // Increases a field value by the amount specified inside a document.
+    /// - Parameters:
+    ///   - field: The field to be increased.
+    ///   - by: The amount to decrease. Defaults to 1.
+    ///   - id: The id of the document.
+    public func increase(_ field: String, by: Int = 1, forId id: String) async throws {
+        guard by > 0 else { return }
+        try await database.collection(path).document(id).updateData([
+            field: FieldValue.increment(Int64(by))
+        ])
+    }
+    
+    /// Decreases a field value by the amount specified inside a document.
+    /// - Parameters:
+    ///   - field: The field to be decreased.
+    ///   - by: The amount to decrease. Defaults to 1.
+    ///   - document: The document.
+    public func decrease(_ field: String, by: Int = 1, forDocument document: F) async throws {
+        guard let id = document.id as? String else { return }
+        guard by > 0 else { return }
+        try await database.collection(path).document(id).updateData([
+            field: FieldValue.increment(Int64(-by))
+        ])
+    }
+    
+    /// Decreases a field value by the amount specified inside a document.
+    /// - Parameters:
+    ///   - field: The field to be decreased.
+    ///   - by: The amount to decrease. Defaults to 1.
+    ///   - id: The id of the document.
+    public func decrease(_ field: String, by: Int = 1, forId id: String) async throws {
+        guard by > 0 else { return }
+        try await database.collection(path).document(id).updateData([
+            field: FieldValue.increment(Int64(-by))
+        ])
+    }
+    
     /// Deletes the provided document from the collection
     /// - Parameters:
     ///   - document: the document to be deleted
