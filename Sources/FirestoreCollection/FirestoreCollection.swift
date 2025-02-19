@@ -152,12 +152,12 @@ public class FirestoreCollection<F: Firestorable> {
         case local
     }
     
-    /// Increases a field value by the amount specified inside a document.
+    /// Increments a field value inside a document by the amount specified.
     /// - Parameters:
-    ///   - field: The field to be increased.
-    ///   - by: The amount to decrease. Defaults to 1.
+    ///   - field: The field to be incremented.
+    ///   - by: The amount to increment. Defaults to 1.
     ///   - document: The document.
-    public func increase(_ field: String, by: Int = 1, forDocument document: F) async throws {
+    public func increment(_ field: String, by: Int = 1, forDocument document: F) async throws {
         guard let id = document.id as? String else { return }
         guard by > 0 else { return }
         try await database.collection(path).document(id).updateData([
@@ -165,24 +165,24 @@ public class FirestoreCollection<F: Firestorable> {
         ])
     }
     
-    // Increases a field value by the amount specified inside a document.
+    // Increments a field value inside a document by the amount specified.
     /// - Parameters:
-    ///   - field: The field to be increased.
-    ///   - by: The amount to decrease. Defaults to 1.
+    ///   - field: The field to be incremented.
+    ///   - by: The amount to increment. Defaults to 1.
     ///   - id: The id of the document.
-    public func increase(_ field: String, by: Int = 1, forId id: String) async throws {
+    public func increment(_ field: String, by: Int = 1, forId id: String) async throws {
         guard by > 0 else { return }
         try await database.collection(path).document(id).updateData([
             field: FieldValue.increment(Int64(by))
         ])
     }
     
-    /// Decreases a field value by the amount specified inside a document.
+    /// Decrements a field value by the amount specified inside a document.
     /// - Parameters:
-    ///   - field: The field to be decreased.
-    ///   - by: The amount to decrease. Defaults to 1.
+    ///   - field: The field to be decremented.
+    ///   - by: The amount to decrement. Defaults to 1.
     ///   - document: The document.
-    public func decrease(_ field: String, by: Int = 1, forDocument document: F) async throws {
+    public func decrement(_ field: String, by: Int = 1, forDocument document: F) async throws {
         guard let id = document.id as? String else { return }
         guard by > 0 else { return }
         try await database.collection(path).document(id).updateData([
@@ -190,12 +190,12 @@ public class FirestoreCollection<F: Firestorable> {
         ])
     }
     
-    /// Decreases a field value by the amount specified inside a document.
+    /// Decrements a field value by the amount specified inside a document.
     /// - Parameters:
-    ///   - field: The field to be decreased.
-    ///   - by: The amount to decrease. Defaults to 1.
+    ///   - field: The field to be decremented.
+    ///   - by: The amount to decrement. Defaults to 1.
     ///   - id: The id of the document.
-    public func decrease(_ field: String, by: Int = 1, forId id: String) async throws {
+    public func decrement(_ field: String, by: Int = 1, forId id: String) async throws {
         guard by > 0 else { return }
         try await database.collection(path).document(id).updateData([
             field: FieldValue.increment(Int64(-by))
