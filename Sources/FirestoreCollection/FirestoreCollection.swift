@@ -81,7 +81,6 @@ public class FirestoreCollection<F: Firestorable> {
     @discardableResult
     public func fetch(_ type: FetchType = .first, limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], isFirst: Bool = false, animation: Animation? = .default) async throws -> FetchedCollectionState {
         if type == .first {
-            queryDocuments.removeAll()
             lastQueryDocumentSnapshot = nil
         }
         var query: Query
@@ -99,13 +98,25 @@ public class FirestoreCollection<F: Firestorable> {
         let documents = snapshot.documents.compactMap { document in
             try? document.data(as: F.self)
         }
-        documents.forEach { document in
-            if let animation {
-                withAnimation(animation) {
+        if let animation {
+            withAnimation(animation) {
+                switch type {
+                case .first:
+                    queryDocuments = documents
+                case .next:
+                    documents.forEach { document in
+                        queryDocuments.append(document)
+                    }
+                }
+            }
+        } else {
+            switch type {
+            case .first:
+                queryDocuments = documents
+            case .next:
+                documents.forEach { document in
                     queryDocuments.append(document)
                 }
-            } else {
-                queryDocuments.append(document)
             }
         }
         guard let lastSnapshot = snapshot.documents.last else {
