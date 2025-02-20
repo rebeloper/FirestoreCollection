@@ -81,6 +81,7 @@ public class FirestoreCollection<F: Firestorable> {
     @discardableResult
     public func fetch(_ type: FetchType = .first, limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], isFirst: Bool = false, animation: Animation? = .default) async throws -> FetchedCollectionState {
         if type == .first {
+            queryDocuments = []
             lastQueryDocumentSnapshot = nil
         }
         var query: Query
