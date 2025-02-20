@@ -29,102 +29,134 @@ public class FirestoreCollection<F: Firestorable> {
     var lastQueryDocumentSnapshot: QueryDocumentSnapshot?
     var listener: ListenerRegistration?
     
-    /// Fetches one document with the specified `id`
-    /// - Parameters:
-    ///   - id: the `id` of the document
-    ///   - database: a `Firestore` instance
-    ///   - animation: optional animation of the operation. Default is `.default`
-    public func fetch(id: String, animation: Animation? = .default) async throws {
-        let document = try await database.collection(path).document(id).getDocument(as: F.self)
-        if let animation {
-            withAnimation(animation) {
-                queryDocument = document
-            }
-        } else {
-            queryDocument = document
-        }
-    }
-    
-    /// Fetches documents from the collection with the given predicates
-    /// - Parameters:
-    ///   - predicates: predicates for the fetch. Default is empty.
-    ///   - animation: optional animation of the operation. Default is `.default`
-    public func fetch(predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws {
-        let query = getQuery(path: path, predicates: predicates)
-        let snapshot = try await query.getDocuments()
-        let documents = snapshot.documents.compactMap { document in
-            try? document.data(as: F.self)
-        }
-        queryDocuments.removeAll()
-        if let animation {
-            withAnimation(animation) {
-                queryDocuments = documents
-            }
-        } else {
-            queryDocuments = documents
-        }
-    }
-    
     public enum FetchType {
-        case first, next
+        case one(id: String)
+        case more(predicates: [QueryPredicate])
+        case first(options: PaginatedFetchOptions, predicates: [QueryPredicate])
+        case next(options: PaginatedFetchOptions, predicates: [QueryPredicate])
+        case count(predicates: [QueryPredicate])
     }
     
-    /// Fetches the next `n` amount (set by the `limit`) of documents according to the specified order. IMPORTANT: Do not set `limit` or `orderBy` in the `predicates`
+    public struct PaginatedFetchOptions {
+        let limit: Int
+        let orderBy: String
+        let descending: Bool
+    }
+    
+    /// Fetches documents
     /// - Parameters:
     ///   - type: the fetch type
-    ///   - limit: the document count limit of the fetch
-    ///   - orderBy: the key for the order of the fetch
-    ///   - descending: should the order be descending
-    ///   - predicates: other predicates than `limit` or `orderBy`. Defualt is empty
     ///   - animation: optional animation of the operation. Default is `.default`
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
-    public func fetch(_ type: FetchType = .first, limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], isFirst: Bool = false, animation: Animation? = .default) async throws -> FetchedCollectionState {
-        if type == .first {
+    public func fetch(_ type: FetchType, animation: Animation? = .default) async throws -> FetchedCollectionState {
+        switch type {
+        case .one(let id):
+            let document = try await database.collection(path).document(id).getDocument(as: F.self)
+            if let animation {
+                withAnimation(animation) {
+                    queryDocument = document
+                }
+            } else {
+                queryDocument = document
+            }
+            return .fetched
+            
+        case .more(let predicates):
+            let query = getQuery(path: path, predicates: predicates)
+            let snapshot = try await query.getDocuments()
+            let documents = snapshot.documents.compactMap { document in
+                try? document.data(as: F.self)
+            }
+            queryDocuments.removeAll()
+            if let animation {
+                withAnimation(animation) {
+                    queryDocuments = documents
+                }
+            } else {
+                queryDocuments = documents
+            }
+            return .fetched
+            
+        case .first(let options, let predicates):
             queryDocuments = []
             lastQueryDocumentSnapshot = nil
-        }
-        var query: Query
-        if let lastQueryDocumentSnapshot {
-            query = getQuery(path: path, predicates: predicates)
-                .order(by: orderBy, descending: descending)
-                .limit(to: limit)
-                .start(afterDocument: lastQueryDocumentSnapshot)
-        } else {
-            query = getQuery(path: path, predicates: predicates)
-                .order(by: orderBy, descending: descending)
-                .limit(to: limit)
-        }
-        let snapshot = try await query.getDocuments()
-        let documents = snapshot.documents.compactMap { document in
-            try? document.data(as: F.self)
-        }
-        if let animation {
-            withAnimation(animation) {
-                switch type {
-                case .first:
+            var query: Query
+            if let lastQueryDocumentSnapshot {
+                query = getQuery(path: path, predicates: predicates)
+                    .order(by: options.orderBy, descending: options.descending)
+                    .limit(to: options.limit)
+                    .start(afterDocument: lastQueryDocumentSnapshot)
+            } else {
+                query = getQuery(path: path, predicates: predicates)
+                    .order(by: options.orderBy, descending: options.descending)
+                    .limit(to: options.limit)
+            }
+            let snapshot = try await query.getDocuments()
+            let documents = snapshot.documents.compactMap { document in
+                try? document.data(as: F.self)
+            }
+            if let animation {
+                withAnimation(animation) {
                     queryDocuments = documents
-                case .next:
+                }
+            } else {
+                queryDocuments = documents
+            }
+            guard let lastSnapshot = snapshot.documents.last else {
+                return documents.isEmpty ? .empty : .fullyFetched
+            }
+            lastQueryDocumentSnapshot = lastSnapshot
+            return .fetched
+            
+        case .next(let options, let predicates):
+            var query: Query
+            if let lastQueryDocumentSnapshot {
+                query = getQuery(path: path, predicates: predicates)
+                    .order(by: options.orderBy, descending: options.descending)
+                    .limit(to: options.limit)
+                    .start(afterDocument: lastQueryDocumentSnapshot)
+            } else {
+                query = getQuery(path: path, predicates: predicates)
+                    .order(by: options.orderBy, descending: options.descending)
+                    .limit(to: options.limit)
+            }
+            let snapshot = try await query.getDocuments()
+            let documents = snapshot.documents.compactMap { document in
+                try? document.data(as: F.self)
+            }
+            if let animation {
+                withAnimation(animation) {
                     documents.forEach { document in
                         queryDocuments.append(document)
                     }
                 }
-            }
-        } else {
-            switch type {
-            case .first:
-                queryDocuments = documents
-            case .next:
+            } else {
                 documents.forEach { document in
                     queryDocuments.append(document)
                 }
             }
+            guard let lastSnapshot = snapshot.documents.last else {
+                return documents.isEmpty ? .empty : .fullyFetched
+            }
+            lastQueryDocumentSnapshot = lastSnapshot
+            return .fetched
+            
+        case .count(let predicates):
+            let query = getQuery(path: path, predicates: predicates)
+            let countQuery = query.count
+            let snapshot = try await countQuery.getAggregation(source: .server)
+            let count = Int(truncating: snapshot.count)
+            if let animation {
+                withAnimation(animation) {
+                    self.count = count
+                }
+            } else {
+                self.count = count
+            }
+            return .fetched
         }
-        guard let lastSnapshot = snapshot.documents.last else {
-            return documents.isEmpty ? .empty : .fullyFetched
-        }
-        lastQueryDocumentSnapshot = lastSnapshot
-        return .fetched
+        
     }
     
     /// Creates the provided document in the collection
@@ -235,36 +267,21 @@ public class FirestoreCollection<F: Firestorable> {
         }
     }
     
-    /// Fetches the documents count from the collection with the given predicates
-    /// - Parameters:
-    ///   - predicates: predicates for the fetch. Default is empty.
-    ///   - animation: optional animation of the operation. Default is `.default`
-    public func fetchCount(predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws {
-        let query = getQuery(path: path, predicates: predicates)
-        let countQuery = query.count
-        let snapshot = try await countQuery.getAggregation(source: .server)
-        let count = Int(truncating: snapshot.count)
-        if let animation {
-            withAnimation(animation) {
-                self.count = count
-            }
-        } else {
-            self.count = count
-        }
-    }
-    
     /// Attaches a listener for `QuerySnapshot` events.
     /// - Parameters:
     ///   - predicates: predicates for the listener. Default is empty.
     ///   - animation: optional animation of the operation. Default is `.default`
-    public func startListening(predicates: [QueryPredicate] = [], animation: Animation? = .default) {
+    ///   - completion: optional completion that surfaces if an error accoured. Returns `nil` if the snapshot is `nil`. IMPORTANT: the listener will be automatically stoped if an error occoures.
+    public func startListening(predicates: [QueryPredicate] = [], animation: Animation? = .default, completion: ((Error?) -> Void)? = nil) {
         let query = getQuery(path: path, predicates: predicates)
         listener = query.addSnapshotListener { snapshot, error in
             if let error {
+                completion?(error)
                 return
             }
             
             guard let snapshot else {
+                completion?(nil)
                 return
             }
             
