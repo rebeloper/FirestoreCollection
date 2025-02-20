@@ -38,9 +38,15 @@ public class FirestoreCollection<F: Firestorable> {
     }
     
     public struct PaginatedFetchOptions {
-        let limit: Int
-        let orderBy: String
-        let descending: Bool
+        public var limit: Int
+        public var orderBy: String
+        public var descending: Bool
+        
+        public init(limit: Int, orderBy: String, descending: Bool = true) {
+            self.limit = limit
+            self.orderBy = orderBy
+            self.descending = descending
+        }
     }
     
     /// Fetches documents
