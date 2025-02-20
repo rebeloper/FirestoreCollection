@@ -116,7 +116,7 @@ public class FirestoreCollection<F: Firestorable> {
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
     public func fetchFirst(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws -> FetchedCollectionState {
-        queryDocuments.removeAll()
+        queryDocuments = []
         lastQueryDocumentSnapshot = nil
         return try await fetchNext(limit, orderBy: orderBy, descending: descending, predicates: predicates, animation: animation)
     }
