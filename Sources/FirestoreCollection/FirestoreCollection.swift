@@ -210,6 +210,7 @@ public class FirestoreCollection<F: Firestorable> {
     public func delete(_ document: F, animation: Animation? = .default) async throws {
         guard let documentId = document.id as? String else { return }
         try await Firestore.firestore().collection(path).document(documentId).delete()
+        guard listener == nil else { return }
         if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
             queryDocument = nil
         } else {
@@ -329,6 +330,7 @@ public class FirestoreCollection<F: Firestorable> {
         var firestorable = document
         firestorable.updatedAt = nil
         try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
+        guard listener == nil else { return }
         let updatedDocument = try await fetch(id: documentId)
         if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
             queryDocument = updatedDocument
@@ -353,6 +355,7 @@ public class FirestoreCollection<F: Firestorable> {
         var firestorable = document
         firestorable.updatedAt = nil
         try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
+        guard listener == nil else { return }
         if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
             var document = document
             document.updatedAt = Timestamp(date: .now)
