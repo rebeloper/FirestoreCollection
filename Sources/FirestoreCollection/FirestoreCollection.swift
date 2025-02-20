@@ -65,8 +65,13 @@ public class FirestoreCollection<F: Firestorable> {
         }
     }
     
+    public enum FetchType {
+        case first, next
+    }
+    
     /// Fetches the next `n` amount (set by the `limit`) of documents according to the specified order. IMPORTANT: Do not set `limit` or `orderBy` in the `predicates`
     /// - Parameters:
+    ///   - type: the fetch type
     ///   - limit: the document count limit of the fetch
     ///   - orderBy: the key for the order of the fetch
     ///   - descending: should the order be descending
@@ -74,7 +79,11 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - animation: optional animation of the operation. Default is `.default`
     /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
     @discardableResult
-    public func fetchNext(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws -> FetchedCollectionState {
+    public func fetch(_ type: FetchType = .first, limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], isFirst: Bool = false, animation: Animation? = .default) async throws -> FetchedCollectionState {
+        if type == .first {
+            queryDocuments.removeAll()
+            lastQueryDocumentSnapshot = nil
+        }
         var query: Query
         if let lastQueryDocumentSnapshot {
             query = getQuery(path: path, predicates: predicates)
@@ -104,22 +113,6 @@ public class FirestoreCollection<F: Firestorable> {
         }
         lastQueryDocumentSnapshot = lastSnapshot
         return .fetched
-    }
-    
-    /// Clears the fetched documents and fetches the next `n` amount (set by the `limit`) of documents according to the specified order. IMPORTANT: Do not set `limit` or `orderBy` in the `predicates`
-    /// - Parameters:
-    ///   - limit: the document count limit of the fetch
-    ///   - orderBy: the key for the order of the fetch
-    ///   - descending: should the order be descending
-    ///   - predicates: other predicates than `limit` or `orderBy`. Defualt is empty
-    ///   - animation: optional animation of the operation. Default is `.default`
-    /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
-    @discardableResult
-    public func fetchFirst(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws -> FetchedCollectionState {
-        queryDocuments.removeAll()
-        lastQueryDocumentSnapshot = nil
-        try await Task.sleep(for: .seconds(1))
-        return try await fetchNext(limit, orderBy: orderBy, descending: descending, predicates: predicates, animation: animation)
     }
     
     /// Creates the provided document in the collection
