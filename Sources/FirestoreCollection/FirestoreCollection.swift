@@ -27,6 +27,7 @@ public class FirestoreCollection<F: Firestorable> {
     public var count: Int?
     
     var lastQueryDocumentSnapshot: QueryDocumentSnapshot?
+    var listener: ListenerRegistration?
     
     /// Fetches one document with the specified `id`
     /// - Parameters:
@@ -243,6 +244,44 @@ public class FirestoreCollection<F: Firestorable> {
         } else {
             self.count = count
         }
+    }
+    
+    /// Attaches a listener for `QuerySnapshot` events.
+    /// - Parameters:
+    ///   - predicates: predicates for the listener. Default is empty.
+    ///   - animation: optional animation of the operation. Default is `.default`
+    public func startListening(predicates: [QueryPredicate] = [], animation: Animation? = .default) {
+        let query = getQuery(path: path, predicates: predicates)
+        listener = query.addSnapshotListener { snapshot, error in
+            if let error {
+                return
+            }
+            
+            guard let snapshot else {
+                return
+            }
+            
+            let documents = snapshot.documents.compactMap { document in
+                try? document.data(as: F.self)
+            }
+            
+            var queryDocuments: [F] = []
+            documents.forEach { document in
+                queryDocuments.append(document)
+            }
+            if let animation {
+                withAnimation(animation) {
+                    self.queryDocuments = queryDocuments
+                }
+            } else {
+                self.queryDocuments = queryDocuments
+            }
+        }
+    }
+    
+    /// Removes the listener being tracked by the `ListenerRegistration`. After the initial call, subsequent calls have no effect.
+    public func stopListening() {
+        listener?.remove()
     }
     
     // MARK: - Private
