@@ -118,7 +118,7 @@ public class FirestoreCollection<F: Firestorable> {
     public func fetchFirst(_ limit: Int, orderBy: String, descending: Bool = true, predicates: [QueryPredicate] = [], animation: Animation? = .default) async throws -> FetchedCollectionState {
         queryDocuments.removeAll()
         lastQueryDocumentSnapshot = nil
-        try await Task.sleep(for: .seconds(0.1))
+        try await Task.sleep(for: .seconds(1))
         return try await fetchNext(limit, orderBy: orderBy, descending: descending, predicates: predicates, animation: animation)
     }
     
