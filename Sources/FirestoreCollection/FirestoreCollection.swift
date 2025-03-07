@@ -10,7 +10,6 @@ import FirebaseAuth
 import FirebaseFirestore
 
 /// An observable for the set collection at the provided `path`
-@MainActor
 @Observable
 public class FirestoreCollection<F: Firestorable> {
     
@@ -175,7 +174,7 @@ public class FirestoreCollection<F: Firestorable> {
         firestorable.userId = userId
         firestorable.createdAt = nil
         firestorable.updatedAt = nil
-        try Firestore.firestore().collection(path).addDocument(from: firestorable)
+        try database.collection(path).addDocument(from: firestorable)
     }
     
     /// Updates the provided document in the collection
@@ -245,6 +244,45 @@ public class FirestoreCollection<F: Firestorable> {
         try await database.collection(path).document(id).updateData([
             field: FieldValue.increment(Int64(-by))
         ])
+    }
+    
+    public enum BatchWriteType {
+        case create, update, delete
+    }
+    
+    public struct BatchedDocument {
+        let type: BatchWriteType
+        let document: F
+    }
+    
+    /// Batch writes the array of documents
+    /// - Parameter documents: an array of documents with the bach write type
+    public func writeBatch(_ documents: [BatchedDocument]) async throws {
+        let batch = database.batch()
+        
+        try documents.forEach { batchedDocument in
+            var firestorable = batchedDocument.document
+            if let documentId = firestorable.id as? String {
+                let reference = database.collection(path).document(documentId)
+                switch batchedDocument.type {
+                case .create:
+                    guard let userId = Auth.auth().currentUser?.uid else {
+                        return
+                    }
+                    firestorable.userId = userId
+                    firestorable.createdAt = nil
+                    firestorable.updatedAt = nil
+                    try batch.setData(from: firestorable, forDocument: reference)
+                case .update:
+                    firestorable.updatedAt = nil
+                    try batch.setData(from: firestorable, forDocument: reference, merge: true)
+                case .delete:
+                    batch.deleteDocument(reference)
+                }
+            }
+        }
+        
+        try await batch.commit()
     }
     
     /// Deletes the provided document from the collection
