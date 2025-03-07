@@ -251,8 +251,13 @@ public class FirestoreCollection<F: Firestorable> {
     }
     
     public struct BatchedWrite {
-        let type: BatchedWriteType
-        let document: F
+        public let type: BatchedWriteType
+        public let document: F
+        
+        public init(_ type: BatchedWriteType, document: F) {
+            self.type = type
+            self.document = document
+        }
     }
     
     /// Batch writes the array of documents
