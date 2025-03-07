@@ -246,23 +246,9 @@ public class FirestoreCollection<F: Firestorable> {
         ])
     }
     
-    public enum BatchedWriteType {
-        case create, update, delete
-    }
-    
-    public struct BatchedWrite {
-        public let type: BatchedWriteType
-        public let document: F
-        
-        public init(_ type: BatchedWriteType, document: F) {
-            self.type = type
-            self.document = document
-        }
-    }
-    
     /// Batch writes the array of documents
     /// - Parameter documents: an array of documents with the bach write type
-    public func writeBatch(_ writes: [BatchedWrite]) async throws {
+    public func writeBatch(_ writes: [BatchedWrite<F>]) async throws {
         let batch = database.batch()
         
         try writes.forEach { batchedWrite in
