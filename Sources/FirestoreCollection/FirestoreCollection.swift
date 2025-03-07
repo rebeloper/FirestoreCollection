@@ -177,6 +177,41 @@ public class FirestoreCollection<F: Firestorable> {
         try database.collection(path).addDocument(from: firestorable)
     }
     
+    /// Batch writes the array of documents
+    /// - Parameter writes: an array of `BatchedWrite`s (docum entswith the batch write type)
+    public func writeBatch(_ writes: [BatchedWrite<F>]) async throws {
+        let batch = database.batch()
+        
+        try writes.forEach { batchedWrite in
+            var firestorable = batchedWrite.document
+                switch batchedWrite.type {
+                case .create:
+                    let reference = database.collection(path).document()
+                    guard let userId = Auth.auth().currentUser?.uid else {
+                        return
+                    }
+                    firestorable.userId = userId
+                    firestorable.createdAt = nil
+                    firestorable.updatedAt = nil
+                    try batch.setData(from: firestorable, forDocument: reference)
+                case .update:
+                    if let documentId = firestorable.id as? String {
+                        let reference = database.collection(path).document(documentId)
+                        firestorable.updatedAt = nil
+                        try batch.setData(from: firestorable, forDocument: reference, merge: true)
+                    }
+                case .delete:
+                    if let documentId = firestorable.id as? String {
+                        let reference = database.collection(path).document(documentId)
+                        batch.deleteDocument(reference)
+                    }
+                }
+            
+        }
+        
+        try await batch.commit()
+    }
+    
     /// Updates the provided document in the collection
     /// - Parameters:
     ///   - document: the document to be updated
@@ -244,36 +279,6 @@ public class FirestoreCollection<F: Firestorable> {
         try await database.collection(path).document(id).updateData([
             field: FieldValue.increment(Int64(-by))
         ])
-    }
-    
-    /// Batch writes the array of documents
-    /// - Parameter documents: an array of documents with the bach write type
-    public func writeBatch(_ writes: [BatchedWrite<F>]) async throws {
-        let batch = database.batch()
-        
-        try writes.forEach { batchedWrite in
-            var firestorable = batchedWrite.document
-            if let documentId = firestorable.id as? String {
-                let reference = database.collection(path).document(documentId)
-                switch batchedWrite.type {
-                case .create:
-                    guard let userId = Auth.auth().currentUser?.uid else {
-                        return
-                    }
-                    firestorable.userId = userId
-                    firestorable.createdAt = nil
-                    firestorable.updatedAt = nil
-                    try batch.setData(from: firestorable, forDocument: reference)
-                case .update:
-                    firestorable.updatedAt = nil
-                    try batch.setData(from: firestorable, forDocument: reference, merge: true)
-                case .delete:
-                    batch.deleteDocument(reference)
-                }
-            }
-        }
-        
-        try await batch.commit()
     }
     
     /// Deletes the provided document from the collection
