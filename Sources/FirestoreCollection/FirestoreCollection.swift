@@ -84,7 +84,7 @@ public class FirestoreCollection<F: Firestorable> {
             return .fetched
             
         case .first(let options, let predicates):
-            queryDocuments = []
+            queryDocuments.removeAll()
             lastQueryDocumentSnapshot = nil
             var query: Query
             if let lastQueryDocumentSnapshot {
