@@ -11,4 +11,5 @@ public enum FetchedCollectionState {
     case empty
     case fetched
     case fullyFetched
+    case noLastDocumentSnapshot
 }

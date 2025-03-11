@@ -86,17 +86,9 @@ public class FirestoreCollection<F: Firestorable> {
         case .first(let options, let predicates):
             queryDocuments.removeAll()
             lastQueryDocumentSnapshot = nil
-            var query: Query
-            if let lastQueryDocumentSnapshot {
-                query = getQuery(path: path, predicates: predicates)
-                    .order(by: options.orderBy, descending: options.descending)
-                    .limit(to: options.limit)
-                    .start(afterDocument: lastQueryDocumentSnapshot)
-            } else {
-                query = getQuery(path: path, predicates: predicates)
-                    .order(by: options.orderBy, descending: options.descending)
-                    .limit(to: options.limit)
-            }
+            let query: Query = getQuery(path: path, predicates: predicates)
+                .order(by: options.orderBy, descending: options.descending)
+                .limit(to: options.limit)
             let snapshot = try await query.getDocuments()
             let documents = snapshot.documents.compactMap { document in
                 try? document.data(as: F.self)
@@ -115,38 +107,35 @@ public class FirestoreCollection<F: Firestorable> {
             return .fetched
             
         case .next(let options, let predicates):
-            var query: Query
             if let lastQueryDocumentSnapshot {
-                query = getQuery(path: path, predicates: predicates)
+                let query: Query = getQuery(path: path, predicates: predicates)
                     .order(by: options.orderBy, descending: options.descending)
                     .limit(to: options.limit)
                     .start(afterDocument: lastQueryDocumentSnapshot)
-            } else {
-                query = getQuery(path: path, predicates: predicates)
-                    .order(by: options.orderBy, descending: options.descending)
-                    .limit(to: options.limit)
-            }
-            let snapshot = try await query.getDocuments()
-            let documents = snapshot.documents.compactMap { document in
-                try? document.data(as: F.self)
-            }
-            if let animation {
-                withAnimation(animation) {
+                
+                let snapshot = try await query.getDocuments()
+                let documents = snapshot.documents.compactMap { document in
+                    try? document.data(as: F.self)
+                }
+                if let animation {
+                    withAnimation(animation) {
+                        documents.forEach { document in
+                            queryDocuments.append(document)
+                        }
+                    }
+                } else {
                     documents.forEach { document in
                         queryDocuments.append(document)
                     }
                 }
-            } else {
-                documents.forEach { document in
-                    queryDocuments.append(document)
+                guard let lastSnapshot = snapshot.documents.last else {
+                    return documents.isEmpty ? .empty : .fullyFetched
                 }
+                self.lastQueryDocumentSnapshot = lastSnapshot
+                return .fetched
+            } else {
+                return .noLastDocumentSnapshot
             }
-            guard let lastSnapshot = snapshot.documents.last else {
-                return documents.isEmpty ? .empty : .fullyFetched
-            }
-            lastQueryDocumentSnapshot = lastSnapshot
-            return .fetched
-            
         case .count(let predicates):
             let query = getQuery(path: path, predicates: predicates)
             let countQuery = query.count
