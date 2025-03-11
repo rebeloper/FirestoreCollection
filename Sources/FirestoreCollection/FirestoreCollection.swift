@@ -10,6 +10,7 @@ import FirebaseAuth
 import FirebaseFirestore
 
 /// An observable for the set collection at the provided `path`
+@MainActor
 @Observable
 public class FirestoreCollection<F: Firestorable> {
     
