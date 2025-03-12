@@ -86,9 +86,7 @@ public class FirestoreCollection<F: Firestorable> {
             
         case .first(let options, let predicates):
             queryDocuments.removeAll()
-            print("FC: queryDocuments: \(queryDocuments)")
             lastQueryDocumentSnapshot = nil
-            print("FC: lastQueryDocumentSnapshot: \(String(describing: lastQueryDocumentSnapshot))")
             let query: Query = getQuery(path: path, predicates: predicates)
                 .order(by: options.orderBy, descending: options.descending)
                 .limit(to: options.limit)
@@ -96,7 +94,6 @@ public class FirestoreCollection<F: Firestorable> {
             let documents = snapshot.documents.compactMap { document in
                 try? document.data(as: F.self)
             }
-            print("FC: documents: \(documents)")
             if let animation {
                 withAnimation(animation) {
                     queryDocuments = documents
@@ -107,7 +104,6 @@ public class FirestoreCollection<F: Firestorable> {
             guard let lastSnapshot = snapshot.documents.last else {
                 return documents.isEmpty ? .empty : .fullyFetched
             }
-            print("FC: lastSnapshot: \(lastSnapshot)")
             lastQueryDocumentSnapshot = lastSnapshot
             return .fetched
             
