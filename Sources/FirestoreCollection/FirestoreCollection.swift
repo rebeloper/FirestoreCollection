@@ -95,7 +95,7 @@ public class FirestoreCollection<F: Firestorable> {
             case .fetched(let documents):
                 return documents.isEmpty ? .empty : .fetched(documents: documents)
             case .fullyFetched:
-                return .fullyFetched
+                return .fetched(documents: [])
             default:
                 return .empty
             }

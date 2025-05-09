@@ -22,5 +22,4 @@ public enum FetchedCollectionOneResult<F: Firestorable> {
 public enum FetchedCollectionSomeResult<F: Firestorable> {
     case empty
     case fetched(documents: [F])
-    case fullyFetched
 }
