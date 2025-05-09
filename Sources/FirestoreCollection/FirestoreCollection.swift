@@ -22,10 +22,6 @@ public class FirestoreCollection<F: Firestorable> {
         self.path = path
     }
     
-    public var queryDocuments: [F] = []
-    public var queryDocument: F?
-    public var count: Int?
-    
     var lastQueryDocumentSnapshot: QueryDocumentSnapshot?
     var listener: ListenerRegistration?
     
@@ -52,21 +48,13 @@ public class FirestoreCollection<F: Firestorable> {
     /// Fetches documents
     /// - Parameters:
     ///   - type: the fetch type
-    ///   - animation: optional animation of the operation. Default is `.default`
-    /// - Returns: a state of the collection after the fetch: `empty`, `fetched` or `fullyFetched`
+    /// - Returns: a result of the collection fetch: `empty`, `fetched(documents: [F])`, `fullyFetched`, `noLastDocumentSnapshot` or `counted(count: Int)`
     @discardableResult
-    public func fetch(_ type: FetchType, animation: Animation? = .default) async throws -> FetchedCollectionState {
+    public func fetch(_ type: FetchType) async throws -> FetchedCollectionResult<F> {
         switch type {
         case .one(let id):
             let document = try await database.collection(path).document(id).getDocument(as: F.self)
-            if let animation {
-                withAnimation(animation) {
-                    queryDocument = document
-                }
-            } else {
-                queryDocument = document
-            }
-            return .fetched
+            return .fetched(documents: [document])
             
         case .more(let predicates):
             let query = getQuery(path: path, predicates: predicates)
@@ -74,18 +62,9 @@ public class FirestoreCollection<F: Firestorable> {
             let documents = snapshot.documents.compactMap { document in
                 try? document.data(as: F.self)
             }
-            queryDocuments.removeAll()
-            if let animation {
-                withAnimation(animation) {
-                    queryDocuments = documents
-                }
-            } else {
-                queryDocuments = documents
-            }
-            return .fetched
+            return .fetched(documents: documents)
             
         case .first(let options, let predicates):
-            queryDocuments.removeAll()
             lastQueryDocumentSnapshot = nil
             let query: Query = getQuery(path: path, predicates: predicates)
                 .order(by: options.orderBy, descending: options.descending)
@@ -94,18 +73,11 @@ public class FirestoreCollection<F: Firestorable> {
             let documents = snapshot.documents.compactMap { document in
                 try? document.data(as: F.self)
             }
-            if let animation {
-                withAnimation(animation) {
-                    queryDocuments = documents
-                }
-            } else {
-                queryDocuments = documents
-            }
             guard let lastSnapshot = snapshot.documents.last else {
                 return documents.isEmpty ? .empty : .fullyFetched
             }
             lastQueryDocumentSnapshot = lastSnapshot
-            return .fetched
+            return .fetched(documents: documents)
             
         case .next(let options, let predicates):
             if let lastQueryDocumentSnapshot {
@@ -118,22 +90,11 @@ public class FirestoreCollection<F: Firestorable> {
                 let documents = snapshot.documents.compactMap { document in
                     try? document.data(as: F.self)
                 }
-                if let animation {
-                    withAnimation(animation) {
-                        documents.forEach { document in
-                            queryDocuments.append(document)
-                        }
-                    }
-                } else {
-                    documents.forEach { document in
-                        queryDocuments.append(document)
-                    }
-                }
                 guard let lastSnapshot = snapshot.documents.last else {
                     return documents.isEmpty ? .empty : .fullyFetched
                 }
                 self.lastQueryDocumentSnapshot = lastSnapshot
-                return .fetched
+                return .fetched(documents: documents)
             } else {
                 return .noLastDocumentSnapshot
             }
@@ -142,14 +103,7 @@ public class FirestoreCollection<F: Firestorable> {
             let countQuery = query.count
             let snapshot = try await countQuery.getAggregation(source: .server)
             let count = Int(truncating: snapshot.count)
-            if let animation {
-                withAnimation(animation) {
-                    self.count = count
-                }
-            } else {
-                self.count = count
-            }
-            return .fetched
+            return .counted(count: count)
         }
         
     }
@@ -168,7 +122,7 @@ public class FirestoreCollection<F: Firestorable> {
     }
     
     /// Batch writes the array of documents
-    /// - Parameter writes: an array of `BatchedWrite`s (docum entswith the batch write type)
+    /// - Parameter writes: an array of `BatchedWrite`s (documents with the batch write type)
     public func writeBatch(_ writes: [BatchedWrite<F>]) async throws {
         let batch = database.batch()
         
@@ -205,20 +159,11 @@ public class FirestoreCollection<F: Firestorable> {
     /// Updates the provided document in the collection
     /// - Parameters:
     ///   - document: the document to be updated
-    ///   - updatedAtServerTimestampStrategy: Default `local` is going to NOT do another fetch for the document and set the `createdAt` to `Date.now`. If set to `server` another fetch will be made to get the server timestamp of the `updatedAt`. IMPORTANT: Set `server` only if `updatedAt` is critical for your logic, because it will do two operations: one when updating and a second one when fetching it to retreive the server timestamp for the `updatedAt`
-    ///   - animation: optional animation of the operation. Default is `.default`
-    public func update(with document: F, updatedAtServerTimestampStrategy: UpdatedAtServerTimestampStrategy = .local, animation: Animation? = .default) async throws {
-        switch updatedAtServerTimestampStrategy {
-        case .local:
-            try updateWithLocalUpdatedAt(with: document, animation: animation)
-        case .server:
-            try await updateWithServerUpdatedAt(with: document, animation: animation)
-        }
-    }
-    
-    public enum UpdatedAtServerTimestampStrategy {
-        case server
-        case local
+    public func update(_ document: F) async throws {
+        guard let documentId = document.id as? String else { return }
+        var firestorable = document
+        firestorable.updatedAt = nil
+        try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
     }
     
     /// Increments a field value inside a document by the amount specified.
@@ -274,62 +219,30 @@ public class FirestoreCollection<F: Firestorable> {
     /// Deletes the provided document from the collection
     /// - Parameters:
     ///   - document: the document to be deleted
-    ///   - animation: optional animation of the operation. Default is `.default`
-    public func delete(_ document: F, animation: Animation? = .default) async throws {
+    public func delete(_ document: F) async throws {
         guard let documentId = document.id as? String else { return }
         try await Firestore.firestore().collection(path).document(documentId).delete()
-        guard listener == nil else { return }
-        if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
-            queryDocument = nil
-        } else {
-            let index = queryDocuments.firstIndex { document in
-                guard let documentID = document.id as? String else { return false }
-                return documentID == documentId
-            }
-            guard let index else { return }
-            if let animation {
-                _ = withAnimation(animation) {
-                    queryDocuments.remove(at: index)
-                }
-            } else {
-                queryDocuments.remove(at: index)
-            }
-        }
     }
     
     /// Attaches a listener for `QuerySnapshot` events.
     /// - Parameters:
     ///   - predicates: predicates for the listener. Default is empty.
-    ///   - animation: optional animation of the operation. Default is `.default`
-    ///   - completion: optional completion that surfaces if an error accoured. Returns `nil` if the snapshot is `nil`. IMPORTANT: the listener will be automatically stoped if an error occoures.
-    public func startListening(predicates: [QueryPredicate] = [], animation: Animation? = .default, completion: ((Error?) -> Void)? = nil) {
+    ///   - completion: completion surfacing the fetched documents over time and any Errors. IMPORTANT: the listener will be automatically stoped if an error occoures.
+    public func startListening(predicates: [QueryPredicate] = [], completion: @escaping (Result<[F], Error>) -> Void) {
         let query = getQuery(path: path, predicates: predicates)
         listener = query.addSnapshotListener { snapshot, error in
             if let error {
-                completion?(error)
+                completion(.failure(error))
                 return
             }
-            
             guard let snapshot else {
-                completion?(nil)
+                completion(.success([]))
                 return
             }
-            
             let documents = snapshot.documents.compactMap { document in
                 try? document.data(as: F.self)
             }
-            
-            var queryDocuments: [F] = []
-            documents.forEach { document in
-                queryDocuments.append(document)
-            }
-            if let animation {
-                withAnimation(animation) {
-                    self.queryDocuments = queryDocuments
-                }
-            } else {
-                self.queryDocuments = queryDocuments
-            }
+            completion(.success(documents))
         }
     }
     
@@ -372,64 +285,5 @@ public class FirestoreCollection<F: Firestorable> {
             }
         }
         return query
-    }
-    
-    private func fetch(id: String) async throws -> F {
-        try await Firestore.firestore().collection(path).document(id).getDocument(as: F.self)
-    }
-    
-    private func updateWithServerUpdatedAt(with document: F, animation: Animation? = .default) async throws {
-        guard let documentId = document.id as? String else { return }
-        var firestorable = document
-        firestorable.updatedAt = nil
-        try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
-        guard listener == nil else { return }
-        let updatedDocument = try await fetch(id: documentId)
-        if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
-            queryDocument = updatedDocument
-        } else {
-            let index = queryDocuments.firstIndex { document in
-                guard let documentID = document.id as? String else { return false }
-                return documentID == documentId
-            }
-            guard let index else { return }
-            if let animation {
-                withAnimation(animation) {
-                    queryDocuments[index] = updatedDocument
-                }
-            } else {
-                queryDocuments[index] = updatedDocument
-            }
-        }
-    }
-    
-    private func updateWithLocalUpdatedAt(with document: F, animation: Animation? = .default) throws {
-        guard let documentId = document.id as? String else { return }
-        var firestorable = document
-        firestorable.updatedAt = nil
-        try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
-        guard listener == nil else { return }
-        if let onlyOneDocument = queryDocument, let documentID = onlyOneDocument.id as? String, documentID == documentId {
-            var document = document
-            document.updatedAt = Timestamp(date: .now)
-            queryDocument = document
-        } else {
-            let index = queryDocuments.firstIndex { document in
-                guard let documentID = document.id as? String else { return false }
-                return documentID == documentId
-            }
-            guard let index else { return }
-            if let animation {
-                withAnimation(animation) {
-                    var document = document
-                    document.updatedAt = Timestamp(date: .now)
-                    queryDocuments[index] = document
-                }
-            } else {
-                var document = document
-                document.updatedAt = Timestamp(date: .now)
-                queryDocuments[index] = document
-            }
-        }
     }
 }
