@@ -49,35 +49,31 @@ public class FirestoreCollection<F: Firestorable> {
     /// Fetches one document with the specified id
     /// - Parameter id: id of the document
     /// - Returns: and optional document
-    public func fetchOne(id: String) async throws -> FetchedCollectionOneResult<F> {
+    public func fetchOne(id: String) async throws -> F? {
         let result = try await fetch(.id(id: id))
         switch result {
-        case .empty:
-            return .empty
         case .fetched(let documents):
             if let document = documents.first {
-                return .fetched(document: document)
+                return document
             } else {
-                return .empty
+                return nil
             }
         default:
-            return .empty
+            return nil
         }
     }
     
-    public func fetchOne(predicates: [QueryPredicate]) async throws -> FetchedCollectionOneResult<F> {
+    public func fetchOne(predicates: [QueryPredicate]) async throws -> F? {
         let result = try await fetch(.one(predicates: predicates))
         switch result {
-        case .empty:
-            return .empty
         case .fetched(let documents):
             if let document = documents.first {
-                return .fetched(document: document)
+                return document
             } else {
-                return .empty
+                return nil
             }
         default:
-            return .empty
+            return nil
         }
     }
     
@@ -86,28 +82,22 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - options: optional paginated fetch options
     ///   - predicates: predicates for the fetch; do NOT use `limit` or `order` (these are set up in the `options`)
     /// - Returns: an array of documents
-    public func fetchSome(options: PaginatedFetchOptions? = nil, predicates: [QueryPredicate]) async throws -> FetchedCollectionSomeResult<F> {
+    public func fetchSome(options: PaginatedFetchOptions? = nil, predicates: [QueryPredicate]) async throws -> [F] {
         if let options {
             let result = try await fetch(.more(options: options, predicates: predicates))
             switch result {
-            case .empty:
-                return .empty
             case .fetched(let documents):
-                return documents.isEmpty ? .empty : .fetched(documents: documents)
-            case .fullyFetched:
-                return .fetched(documents: [])
+                return documents
             default:
-                return .empty
+                return []
             }
         } else {
             let result = try await fetch(.some(predicates: predicates))
             switch result {
-            case .empty:
-                return .empty
             case .fetched(let documents):
-                return documents.isEmpty ? .empty : .fetched(documents: documents)
+                return documents
             default:
-                return .empty
+                return []
             }
         }
     }
