@@ -49,73 +49,79 @@ public class FirestoreCollection<F: Firestorable> {
     /// Fetches one document with the specified id
     /// - Parameter id: id of the document
     /// - Returns: and optional document
-    public func fetchOne(id: String) async throws -> F? {
+    public func fetchOne(id: String) async throws -> FetchedCollectionOneResult<F> {
         let result = try await fetch(.id(id: id))
-        if case .fetched(let documents) = result {
-            return documents.first
-        } else {
-            return nil
+        switch result {
+        case .empty:
+            return .empty
+        case .fetched(let documents):
+            if let document = documents.first {
+                return .fetched(document: document)
+            } else {
+                return .empty
+            }
+        default:
+            return .empty
         }
     }
     
-    public func fetchOne(predicates: [QueryPredicate]) async throws -> F? {
+    public func fetchOne(predicates: [QueryPredicate]) async throws -> FetchedCollectionOneResult<F> {
         let result = try await fetch(.one(predicates: predicates))
-        if case .fetched(let documents) = result {
-            return documents.first
-        } else {
-            return nil
+        switch result {
+        case .empty:
+            return .empty
+        case .fetched(let documents):
+            if let document = documents.first {
+                return .fetched(document: document)
+            } else {
+                return .empty
+            }
+        default:
+            return .empty
         }
     }
     
-    /// Fetches an array of documents for the specified predicates
-    /// - Parameter predicates: predicates for the fetch
-    /// - Returns: an array of documents
-    public func fetchSome(predicates: [QueryPredicate]) async throws -> [F] {
-        let result = try await fetch(.some(predicates: predicates))
-        if case .fetched(let documents) = result {
-            return documents
-        } else {
-            return []
-        }
-    }
-    
-    /// Fetches the first array of documents for the specified paginated fetch options and predicates
+    /// Fetches an array of documents for the specified optional paginated fetch options and predicates
     /// - Parameters:
-    ///   - options: paginated fetch options
+    ///   - options: optional paginated fetch options
     ///   - predicates: predicates for the fetch; do NOT use `limit` or `order` (these are set up in the `options`)
     /// - Returns: an array of documents
-    public func fetchFirstFew(options: PaginatedFetchOptions, predicates: [QueryPredicate]) async throws -> [F] {
-        let result = try await fetch(.firstFew(options: options, predicates: predicates))
-        if case .fetched(let documents) = result {
-            return documents
+    public func fetchSome(options: PaginatedFetchOptions? = nil, predicates: [QueryPredicate]) async throws -> FetchedCollectionSomeResult<F> {
+        if let options {
+            let result = try await fetch(.more(options: options, predicates: predicates))
+            switch result {
+            case .empty:
+                return .empty
+            case .fetched(let documents):
+                return documents.isEmpty ? .empty : .fetched(documents: documents)
+            case .fullyFetched:
+                return .fullyFetched
+            default:
+                return .empty
+            }
         } else {
-            return []
-        }
-    }
-    
-    /// Fetches soem more array of documents for the specified paginated fetch options and predicates, use this after you fetched the first array of docuemnts with `fetchfetchFirstFew(options: PaginatedFetchOptions, predicates: [QueryPredicate])`
-    /// - Parameters:
-    ///   - options: paginated fetch options
-    ///   - predicates: predicates for the fetch; do NOT use `limit` or `order` (these are set up in the `options`)
-    /// - Returns: an array of documents
-    public func fetchMore(options: PaginatedFetchOptions, predicates: [QueryPredicate]) async throws -> [F] {
-        let result = try await fetch(.more(options: options, predicates: predicates))
-        if case .fetched(let documents) = result {
-            return documents
-        } else {
-            return []
+            let result = try await fetch(.some(predicates: predicates))
+            switch result {
+            case .empty:
+                return .empty
+            case .fetched(let documents):
+                return documents.isEmpty ? .empty : .fetched(documents: documents)
+            default:
+                return .empty
+            }
         }
     }
     
     /// Fetches the count of documents for the specified predicates
     /// - Parameter predicates: predicates for the fetch
     /// - Returns: the optional count of documents
-    public func fetchCount(predicates: [QueryPredicate]) async throws -> Int? {
+    public func fetchCount(predicates: [QueryPredicate]) async throws -> Int {
         let result = try await fetch(.count(predicates: predicates))
-        if case .counted(let count) = result {
+        switch result {
+        case .counted(let count):
             return count
-        } else {
-            return nil
+        default:
+            return 0
         }
     }
     
@@ -179,7 +185,7 @@ public class FirestoreCollection<F: Firestorable> {
                 self.lastQueryDocumentSnapshot = lastSnapshot
                 return .fetched(documents: documents)
             } else {
-                return .noLastDocumentSnapshot
+                return try await fetch(.firstFew(options: options, predicates: predicates))
             }
         case .count(let predicates):
             let query = getQuery(path: path, predicates: predicates)

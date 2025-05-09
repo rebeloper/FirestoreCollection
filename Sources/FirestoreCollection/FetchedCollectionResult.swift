@@ -11,6 +11,16 @@ public enum FetchedCollectionResult<F: Firestorable> {
     case empty
     case fetched(documents: [F])
     case fullyFetched
-    case noLastDocumentSnapshot
     case counted(count: Int)
+}
+
+public enum FetchedCollectionOneResult<F: Firestorable> {
+    case empty
+    case fetched(document: F)
+}
+
+public enum FetchedCollectionSomeResult<F: Firestorable> {
+    case empty
+    case fetched(documents: [F])
+    case fullyFetched
 }
