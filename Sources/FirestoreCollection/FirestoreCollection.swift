@@ -26,9 +26,10 @@ public class FirestoreCollection<F: Firestorable> {
     var listener: ListenerRegistration?
     
     public enum FetchType {
-        case one(id: String)
+        case id(id: String)
+        case one(predicates: [QueryPredicate])
         case some(predicates: [QueryPredicate])
-        case first(options: PaginatedFetchOptions, predicates: [QueryPredicate])
+        case firstFew(options: PaginatedFetchOptions, predicates: [QueryPredicate])
         case more(options: PaginatedFetchOptions, predicates: [QueryPredicate])
         case count(predicates: [QueryPredicate])
     }
@@ -49,7 +50,16 @@ public class FirestoreCollection<F: Firestorable> {
     /// - Parameter id: id of the document
     /// - Returns: and optional document
     public func fetchOne(id: String) async throws -> F? {
-        let result = try await fetch(.one(id: id))
+        let result = try await fetch(.id(id: id))
+        if case .fetched(let documents) = result {
+            return documents.first
+        } else {
+            return nil
+        }
+    }
+    
+    public func fetchOne(predicates: [QueryPredicate]) async throws -> F? {
+        let result = try await fetch(.one(predicates: predicates))
         if case .fetched(let documents) = result {
             return documents.first
         } else {
@@ -74,8 +84,8 @@ public class FirestoreCollection<F: Firestorable> {
     ///   - options: paginated fetch options
     ///   - predicates: predicates for the fetch; do NOT use `limit` or `order` (these are set up in the `options`)
     /// - Returns: an array of documents
-    public func fetchFirst(options: PaginatedFetchOptions, predicates: [QueryPredicate]) async throws -> [F] {
-        let result = try await fetch(.first(options: options, predicates: predicates))
+    public func fetchFirstFew(options: PaginatedFetchOptions, predicates: [QueryPredicate]) async throws -> [F] {
+        let result = try await fetch(.firstFew(options: options, predicates: predicates))
         if case .fetched(let documents) = result {
             return documents
         } else {
@@ -83,7 +93,7 @@ public class FirestoreCollection<F: Firestorable> {
         }
     }
     
-    /// Fetches soem more array of documents for the specified paginated fetch options and predicates, use this after you fetched the first array of docuemnts with `fetch(first options: PaginatedFetchOptions, predicates: [QueryPredicate])`
+    /// Fetches soem more array of documents for the specified paginated fetch options and predicates, use this after you fetched the first array of docuemnts with `fetchfetchFirstFew(options: PaginatedFetchOptions, predicates: [QueryPredicate])`
     /// - Parameters:
     ///   - options: paginated fetch options
     ///   - predicates: predicates for the fetch; do NOT use `limit` or `order` (these are set up in the `options`)
@@ -115,9 +125,19 @@ public class FirestoreCollection<F: Firestorable> {
     /// - Returns: a result of the collection fetch: `empty`, `fetched(documents: [F])`, `fullyFetched`, `noLastDocumentSnapshot` or `counted(count: Int)`
     public func fetch(_ type: FetchType) async throws -> FetchedCollectionResult<F> {
         switch type {
-        case .one(let id):
+        case .id(let id):
             let document = try await database.collection(path).document(id).getDocument(as: F.self)
             return .fetched(documents: [document])
+            
+        case .one(let predicates):
+            var predicates = predicates
+            predicates.append(.limit(to: 1))
+            let query = getQuery(path: path, predicates: predicates)
+            let snapshot = try await query.getDocuments()
+            let documents = snapshot.documents.compactMap { document in
+                try? document.data(as: F.self)
+            }
+            return .fetched(documents: documents)
             
         case .some(let predicates):
             let query = getQuery(path: path, predicates: predicates)
@@ -127,7 +147,7 @@ public class FirestoreCollection<F: Firestorable> {
             }
             return .fetched(documents: documents)
             
-        case .first(let options, let predicates):
+        case .firstFew(let options, let predicates):
             lastQueryDocumentSnapshot = nil
             let query: Query = getQuery(path: path, predicates: predicates)
                 .order(by: options.orderBy, descending: options.descending)
