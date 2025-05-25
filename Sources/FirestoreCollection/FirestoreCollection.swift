@@ -195,8 +195,8 @@ public class FirestoreCollection<F: Firestorable> {
         }
         var firestorable = document
         firestorable.userId = userId
-        firestorable.createdAt = nil
-        firestorable.updatedAt = nil
+        firestorable.createdAt = Timestamp(date: Date())
+        firestorable.updatedAt = Timestamp(date: Date())
         try database.collection(path).addDocument(from: firestorable)
     }
     
@@ -214,13 +214,13 @@ public class FirestoreCollection<F: Firestorable> {
                         return
                     }
                     firestorable.userId = userId
-                    firestorable.createdAt = nil
-                    firestorable.updatedAt = nil
+                    firestorable.createdAt = Timestamp(date: Date())
+                    firestorable.updatedAt = Timestamp(date: Date())
                     try batch.setData(from: firestorable, forDocument: reference)
                 case .update:
                     if let documentId = firestorable.id as? String {
                         let reference = database.collection(path).document(documentId)
-                        firestorable.updatedAt = nil
+                        firestorable.updatedAt = Timestamp(date: Date())
                         try batch.setData(from: firestorable, forDocument: reference, merge: true)
                     }
                 case .delete:
@@ -241,7 +241,7 @@ public class FirestoreCollection<F: Firestorable> {
     public func update(_ document: F) async throws {
         guard let documentId = document.id as? String else { return }
         var firestorable = document
-        firestorable.updatedAt = nil
+        firestorable.updatedAt = Timestamp(date: Date())
         try Firestore.firestore().collection(path).document(documentId).setData(from: firestorable, merge: true)
     }
     
